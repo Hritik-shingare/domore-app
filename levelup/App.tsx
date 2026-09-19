@@ -21,12 +21,13 @@ import { SignupScreen } from './src/screens/SignupScreen';
 
 import { supabase } from './src/lib/supabase';
 import {
-  mockDailyActivity,
-  mockSkills,
-  mockLeaderboard,
-  mockProfile,
-} from './src/data/mockData';
-import { TabType } from './src/types';
+  createSkill,
+  fetchLeaderboard,
+  fetchTodayActivity,
+  fetchUserProfile,
+  fetchUserSkills,
+} from './src/services/dataService';
+import { DailyActivity, LeaderboardUser, Skill, TabType, UserProfile } from './src/types';
 
 export default function App() {
   const [session, setSession] = useState<Session | null>(null);
@@ -34,6 +35,13 @@ export default function App() {
   const [initError, setInitError] = useState<string | null>(null);
   const [authMode, setAuthMode] = useState<'login' | 'signup'>('login');
   const [currentTab, setCurrentTab] = useState<TabType>('home');
+
+  // Authenticated user's live data state
+  const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  const [dailyActivity, setDailyActivity] = useState<DailyActivity | null>(null);
+  const [skills, setSkills] = useState<Skill[]>([]);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([]);
+  const [, setLoadingData] = useState(false);
 
   // Track if component is mounted to avoid setting state on unmounted tree
   const isMountedRef = useRef(true);
@@ -62,12 +70,69 @@ export default function App() {
     } catch (err: any) {
       console.warn('Auth initialization warning:', err?.message || err);
       if (isMountedRef.current) {
-        // Fallback to unauthenticated (Login screen) instead of getting stuck on spinner
         setSession(null);
       }
     } finally {
       if (isMountedRef.current) {
         setLoadingSession(false);
+      }
+    }
+  };
+
+  const loadUserData = async (userId: string, userMeta?: any) => {
+    try {
+      setLoadingData(true);
+      console.log('[Auth] Loading Supabase data for authenticated user UUID:', userId);
+
+      const [fetchedProfile, fetchedActivity, fetchedSkills] = await Promise.all([
+        fetchUserProfile(userId).catch((err) => {
+          console.warn('[DataService] Profile fetch warning:', err);
+          return {
+            name: userMeta?.display_name || userMeta?.username || 'LevelUp User',
+            username: `@${userMeta?.username || 'user'}`,
+            level: 1,
+            overallScore: 0,
+            weeklyScore: 0,
+            rank: 1,
+            daysActive: 0,
+            completedGoals: 0,
+          };
+        }),
+        fetchTodayActivity(userId).catch((err) => {
+          console.warn('[DataService] Activity fetch warning:', err);
+          return {
+            score: 0,
+            maxScore: 100,
+            steps: 0,
+            stepGoal: 8000,
+            hasRunToday: false,
+            runDistanceKm: 0,
+            caloriesBurned: 0,
+            calorieGoal: 500,
+            streakDays: 0,
+          };
+        }),
+        fetchUserSkills(userId).catch((err) => {
+          console.warn('[DataService] Skills fetch warning:', err);
+          return [];
+        }),
+      ]);
+
+      if (isMountedRef.current) {
+        setUserProfile(fetchedProfile);
+        setDailyActivity(fetchedActivity);
+        setSkills(fetchedSkills);
+
+        const fetchedLeaderboard = await fetchLeaderboard(userId, fetchedProfile).catch(() => []);
+        if (isMountedRef.current) {
+          setLeaderboard(fetchedLeaderboard);
+        }
+      }
+    } catch (err) {
+      console.warn('[DataService] Data load error:', err);
+    } finally {
+      if (isMountedRef.current) {
+        setLoadingData(false);
       }
     }
   };
@@ -93,6 +158,19 @@ export default function App() {
       subscription?.unsubscribe();
     };
   }, []);
+
+  // Fetch or reset user data when the authenticated user session changes
+  useEffect(() => {
+    if (session?.user?.id) {
+      loadUserData(session.user.id, session.user.user_metadata);
+    } else {
+      // Clear all user data immediately upon sign out to ensure account isolation
+      setUserProfile(null);
+      setDailyActivity(null);
+      setSkills([]);
+      setLeaderboard([]);
+    }
+  }, [session?.user?.id]);
 
   if (loadingSession) {
     return (
@@ -143,25 +221,57 @@ export default function App() {
     );
   }
 
+  // Active user data fallbacks scoped to current session user
+  const currentProfile: UserProfile = userProfile || {
+    name: session.user.user_metadata?.display_name || session.user.user_metadata?.username || 'LevelUp User',
+    username: `@${session.user.user_metadata?.username || 'user'}`,
+    level: 1,
+    overallScore: 0,
+    weeklyScore: 0,
+    rank: 1,
+    daysActive: 0,
+    completedGoals: 0,
+  };
+
+  const currentActivity: DailyActivity = dailyActivity || {
+    score: 0,
+    maxScore: 100,
+    steps: 0,
+    stepGoal: 8000,
+    hasRunToday: false,
+    runDistanceKm: 0,
+    caloriesBurned: 0,
+    calorieGoal: 500,
+    streakDays: 0,
+  };
+
+  const handleAddSkill = async (name: string, category: Skill['category']) => {
+    if (!session?.user?.id) return;
+    const newSkill = await createSkill(session.user.id, name, category);
+    if (newSkill) {
+      setSkills((prev) => [newSkill, ...prev]);
+    }
+  };
+
   const renderCurrentScreen = () => {
     switch (currentTab) {
       case 'home':
-        return <HomeScreen activity={mockDailyActivity} />;
+        return <HomeScreen activity={currentActivity} />;
       case 'skills':
-        return <SkillsScreen skills={mockSkills} />;
+        return <SkillsScreen skills={skills} onAddSkill={handleAddSkill} />;
       case 'leaderboard':
-        return <LeaderboardScreen users={mockLeaderboard} />;
+        return <LeaderboardScreen users={leaderboard} />;
       case 'profile':
-        return <ProfileScreen profile={mockProfile} />;
+        return <ProfileScreen profile={currentProfile} />;
       default:
-        return <HomeScreen activity={mockDailyActivity} />;
+        return <HomeScreen activity={currentActivity} />;
     }
   };
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <StatusBar style="light" />
-      <Header level={mockProfile.level} streak={mockDailyActivity.streakDays} />
+      <Header level={currentProfile.level} streak={currentActivity.streakDays} />
       <View style={styles.screenContainer}>
         {renderCurrentScreen()}
       </View>
@@ -169,6 +279,7 @@ export default function App() {
     </SafeAreaView>
   );
 }
+
 
 const styles = StyleSheet.create({
   safeArea: {

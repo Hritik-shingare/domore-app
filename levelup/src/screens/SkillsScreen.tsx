@@ -12,35 +12,49 @@ import { Skill } from '../types';
 
 interface SkillsScreenProps {
   skills: Skill[];
+  onAddSkill?: (name: string, category: Skill['category']) => Promise<void>;
 }
 
 const CATEGORIES: Skill['category'][] = ['Fitness', 'Coding', 'Mindset', 'Language', 'Productivity'];
 
-export const SkillsScreen: React.FC<SkillsScreenProps> = ({ skills: initialSkills }) => {
+export const SkillsScreen: React.FC<SkillsScreenProps> = ({ skills: initialSkills, onAddSkill }) => {
   const [skillsList, setSkillsList] = useState<Skill[]>(initialSkills);
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [isAddModalVisible, setIsAddModalVisible] = useState(false);
   const [newSkillName, setNewSkillName] = useState('');
   const [newSkillCategory, setNewSkillCategory] = useState<Skill['category']>('Coding');
 
+  // Keep internal list in sync when prop updates (e.g. on account switch or fetch)
+  React.useEffect(() => {
+    setSkillsList(initialSkills);
+  }, [initialSkills]);
+
   const filteredSkills = selectedCategory === 'All'
     ? skillsList
     : skillsList.filter((s) => s.category === selectedCategory);
 
-  const handleAddSkill = () => {
+  const handleAddSkill = async () => {
     if (!newSkillName.trim()) return;
-    const newSkill: Skill = {
-      id: Date.now().toString(),
-      name: newSkillName.trim(),
-      category: newSkillCategory,
-      level: 1,
-      progressPercent: 10,
-      hoursInvested: 1,
-    };
-    setSkillsList([newSkill, ...skillsList]);
+    const name = newSkillName.trim();
+    const category = newSkillCategory;
     setNewSkillName('');
     setIsAddModalVisible(false);
+
+    if (onAddSkill) {
+      await onAddSkill(name, category);
+    } else {
+      const localSkill: Skill = {
+        id: Date.now().toString(),
+        name,
+        category,
+        level: 1,
+        progressPercent: 10,
+        hoursInvested: 0,
+      };
+      setSkillsList([localSkill, ...skillsList]);
+    }
   };
+
 
   const getCategoryColor = (category: Skill['category']) => {
     switch (category) {
