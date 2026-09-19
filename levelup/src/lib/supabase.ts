@@ -10,6 +10,7 @@
  * Do NOT import or use the service-role key here.
  */
 
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
@@ -25,10 +26,11 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
   auth: {
-    // Disable automatic token refresh — auth is not implemented yet.
-    // This will be revisited when login/signup is added.
-    autoRefreshToken: false,
-    persistSession: false,
+    // Persist the session token to AsyncStorage so the user stays
+    // logged in after closing and reopening the app.
+    storage: AsyncStorage,
+    autoRefreshToken: true,
+    persistSession: true,
     detectSessionInUrl: false,
   },
 });

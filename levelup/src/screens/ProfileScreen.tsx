@@ -1,12 +1,21 @@
-import React from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import React, { useState } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { UserProfile } from '../types';
+import { supabase } from '../lib/supabase';
 
 interface ProfileScreenProps {
   profile: UserProfile;
 }
 
 export const ProfileScreen: React.FC<ProfileScreenProps> = ({ profile }) => {
+  const [loggingOut, setLoggingOut] = useState(false);
+
+  const handleLogout = async () => {
+    setLoggingOut(true);
+    await supabase.auth.signOut();
+    // The auth listener in App.tsx will handle switching to the login screen.
+  };
+
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
       {/* Profile Header */}
@@ -85,9 +94,23 @@ export const ProfileScreen: React.FC<ProfileScreenProps> = ({ profile }) => {
           </View>
         </View>
       </View>
+
+      {/* Logout */}
+      <Pressable
+        style={[styles.logoutButton, loggingOut && styles.logoutButtonDisabled]}
+        onPress={handleLogout}
+        disabled={loggingOut}
+      >
+        {loggingOut ? (
+          <ActivityIndicator color="#EF4444" size="small" />
+        ) : (
+          <Text style={styles.logoutText}>Sign Out</Text>
+        )}
+      </Pressable>
     </ScrollView>
   );
 };
+
 
 const styles = StyleSheet.create({
   container: {
@@ -248,4 +271,22 @@ const styles = StyleSheet.create({
     backgroundColor: '#1E293B',
     marginVertical: 4,
   },
+  logoutButton: {
+    backgroundColor: 'rgba(239, 68, 68, 0.1)',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: 'rgba(239, 68, 68, 0.3)',
+    padding: 14,
+    alignItems: 'center',
+    marginTop: 20,
+  },
+  logoutButtonDisabled: {
+    opacity: 0.5,
+  },
+  logoutText: {
+    color: '#EF4444',
+    fontSize: 15,
+    fontWeight: '700',
+  },
 });
+
