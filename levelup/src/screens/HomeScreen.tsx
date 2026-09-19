@@ -1,6 +1,7 @@
-import React from 'react';
+import React, { useEffect } from 'react';
 import { ScrollView, StyleSheet, Text, View } from 'react-native';
 import { DailyActivity } from '../types';
+import { supabase } from '../lib/supabase';
 
 interface HomeScreenProps {
   activity: DailyActivity;
@@ -9,6 +10,33 @@ interface HomeScreenProps {
 export const HomeScreen: React.FC<HomeScreenProps> = ({ activity }) => {
   const stepProgress = Math.min(100, Math.round((activity.steps / activity.stepGoal) * 100));
   const calorieProgress = Math.min(100, Math.round((activity.caloriesBurned / activity.calorieGoal) * 100));
+
+  // Phase 3 Step 1: Verify Supabase connection on mount.
+  // Queries a known public table. Logs success or error to the console.
+  // No UI is changed. This block will be replaced by real data fetching later.
+  useEffect(() => {
+    const checkSupabaseConnection = async () => {
+      try {
+        const { error } = await supabase
+          .from('profiles')
+          .select('id')
+          .limit(1);
+
+        if (error) {
+          // An error here is still a successful connection — it means the
+          // request reached Supabase (e.g., RLS blocked it, table not found, etc.)
+          console.log('[Supabase] Connected. Query response:', error.message);
+        } else {
+          console.log('[Supabase] Connected successfully ✅');
+        }
+      } catch (err) {
+        console.error('[Supabase] Connection failed ❌', err);
+      }
+    };
+
+    checkSupabaseConnection();
+  }, []);
+
 
   return (
     <ScrollView style={styles.container} contentContainerStyle={styles.content}>
